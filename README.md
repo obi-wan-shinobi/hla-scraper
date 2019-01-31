@@ -1,0 +1,1 @@
+This repository is designed to scrape images from the [Hubble Legacy Archive](https://hla.stsci.edu) with the goal of using them to train image colorization and editing tasks. 

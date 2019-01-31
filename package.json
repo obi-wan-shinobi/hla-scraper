@@ -1,0 +1,11 @@
+{
+  "name": "hla_scraper",
+  "version": "1.0.0",
+  "description": "Scrapes images from Hubble Legacy Archive",
+  "main": "main.js",
+  "author": "Kai Marshland <kaimarshland@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer": "^1.11.0"
+  }
+}
