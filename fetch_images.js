@@ -3,6 +3,7 @@ const request = require('request');
 const { promisify } = require('util');
 const mkdirp = promisify(require('mkdirp'));
 const crypto = require('crypto');
+const PromisePool = require('es6-promise-pool');
 const getImageIndex = require('./fetch_image_index');
 
 
@@ -15,7 +16,7 @@ function generateUrl(ra, declination, radius) {
         .replace('{RAD}', radius);
 }
 
-async function downloadImages(url, debugPrefix='') {
+async function downloadImages(url, debugPrefix='', concurrency=10) {
     const objectDir = `data/objects/${crypto.createHash('md5').update(url).digest('hex')}`;
     await mkdirp(objectDir);
 
@@ -28,10 +29,20 @@ async function downloadImages(url, debugPrefix='') {
     }
 
     const index = await getImageIndex(url, '\t');
-    for (let i = 0; i < index.length; i++) {
+
+    let i = -1;
+    const pool = new PromisePool(() => {
+        i++;
+
+        if (i >= index.length) {
+            return null;
+        }
+
         console.log(`${debugPrefix}\tDownloading image ${i}`);
-        await downloadImage(index[i].src, objectDir, i);
-    }
+        return downloadImage(index[i].src, objectDir, i);
+    }, concurrency);
+
+    await pool.start();
 
     await promisify(fs.writeFile)(indexFile, JSON.stringify(index, null, 4));
     console.log(`${debugPrefix}[${new Date().toLocaleString()}] Download complete`);
@@ -58,9 +69,13 @@ function downloadImage(imageURL, objectDir, i) {
 }
 
 async function downloadAll() {
-    for (let ra = 200; ra < 220; ra += 1) {
-        for (let dec = 50; dec < 60; dec += 1) {
-            await downloadImages(generateUrl(ra, dec, 1));
+    for (let ra = 0; ra < 360; ra += 1) {
+        for (let dec = 0; dec < 360; dec += 1) {
+            try {
+                await downloadImages(generateUrl(ra, dec, 1));
+            } catch (e) {
+                console.error(e);
+            }
         }
     }
 }
