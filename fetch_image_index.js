@@ -2,8 +2,14 @@ const puppeteer = require('puppeteer');
 
 const IMAGES_PER_PAGE = 20;
 
-async function getImageIndex(url, debugPrefix='') {
-    const browser = await puppeteer.launch({ headless: true });
+async function getImageIndex(url, debugPrefix='', browserPromise) {
+
+    let createdBrowser = !browserPromise;
+    if (createdBrowser) {
+        browserPromise = puppeteer.launch();
+    }
+
+    const browser = await browserPromise;
 
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
@@ -16,7 +22,10 @@ async function getImageIndex(url, debugPrefix='') {
         throw e;
     } finally {
         await page.close();
-        await browser.close();
+
+        if (createdBrowser) {
+            await browser.close();
+        }
     }
 
     return results;

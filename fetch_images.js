@@ -4,8 +4,11 @@ const { promisify } = require('util');
 const mkdirp = promisify(require('mkdirp'));
 const crypto = require('crypto');
 const PromisePool = require('es6-promise-pool');
+const puppeteer = require('puppeteer');
 const getImageIndex = require('./fetch_image_index');
 
+const INDEX_DOWNLOAD_CONCURRENCY = 3;
+const IMAGE_DOWNLOAD_CONCURRENCY = 10;
 
 const URL_FORMAT = "https://hla.stsci.edu/hlaview.html#Images|filterText%3D%24filterTypes%3D|query_string=M101&posfilename=&poslocalname=&posfilecount=&listdelimiter=whitespace&listformat=degrees&RA={RA}&Dec={DEC}&Radius={RAD}&inst-control=all&inst=ACS&inst=ACSGrism&inst=WFC3&inst=WFPC2&inst=NICMOS&inst=NICGRISM&inst=COS&inst=WFPC2-PC&inst=STIS&inst=FOS&inst=GHRS&imagetype=color&prop_id=&spectral_elt=&proprietary=both&preview=1&output_size=256&cutout_size=12.8|ra=&dec=&sr=&level=&image=&inst=ACS%2CACSGrism%2CWFC3%2CWFPC2%2CNICMOS%2CNICGRISM%2CCOS%2CWFPC2-PC%2CSTIS%2CFOS%2CGHRS&ds=";
 
@@ -16,8 +19,11 @@ function generateUrl(ra, declination, radius) {
         .replace('{RAD}', radius);
 }
 
-async function downloadImages(url, debugPrefix='', concurrency=10) {
-    const objectDir = `data/objects/${crypto.createHash('md5').update(url).digest('hex')}`;
+async function downloadImages(url, debugPrefix='', browserPromise) {
+    const startTime = Date.now();
+
+    const hash = crypto.createHash('md5').update(url).digest('hex');
+    const objectDir = `data/objects/${hash}`;
     await mkdirp(objectDir);
 
     console.log(`${debugPrefix}[${new Date().toLocaleString()}] Downloading ${url}`);
@@ -28,7 +34,7 @@ async function downloadImages(url, debugPrefix='', concurrency=10) {
         return;
     }
 
-    const index = await getImageIndex(url, '\t');
+    const index = await getImageIndex(url, `${debugPrefix}[${hash}]\t`, browserPromise);
 
     let i = -1;
     const pool = new PromisePool(() => {
@@ -40,12 +46,15 @@ async function downloadImages(url, debugPrefix='', concurrency=10) {
 
         console.log(`${debugPrefix}\tDownloading image ${i}`);
         return downloadImage(index[i].src, objectDir, i);
-    }, concurrency);
+    }, IMAGE_DOWNLOAD_CONCURRENCY);
 
     await pool.start();
 
     await promisify(fs.writeFile)(indexFile, JSON.stringify(index, null, 4));
-    console.log(`${debugPrefix}[${new Date().toLocaleString()}] Download complete`);
+    console.log(`${debugPrefix}[${new Date().toLocaleString()}] Download complete of ${hash}`);
+
+    const elapsedTime = Date.now() - startTime;
+    console.log(`${debugPrefix}[${new Date().toLocaleString()}] Finished getting images (${index.length} downloaded, ${elapsedTime}ms)`);
 }
 
 function downloadImage(imageURL, objectDir, i) {
@@ -69,15 +78,30 @@ function downloadImage(imageURL, objectDir, i) {
 }
 
 async function downloadAll() {
+    const urls = [];
+
     for (let ra = 0; ra < 360; ra += 1) {
         for (let dec = 0; dec < 360; dec += 1) {
-            try {
-                await downloadImages(generateUrl(ra, dec, 1));
-            } catch (e) {
-                console.error(e);
-            }
+            urls.push(generateUrl(ra, dec, 1));
         }
     }
+
+    const browserPromise = puppeteer.launch();
+
+    let i = -1;
+    const pool = new PromisePool(() => {
+        i++;
+
+        if (i >= urls.length) {
+            return null;
+        }
+
+        return downloadImages(urls[i], undefined, browserPromise).catch(error => console.error(error));
+    }, INDEX_DOWNLOAD_CONCURRENCY);
+
+    await pool.start();
+    const browser = await browserPromise;
+    await browser.close();
 }
 
 downloadAll();
