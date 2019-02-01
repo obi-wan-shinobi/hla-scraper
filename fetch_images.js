@@ -26,11 +26,11 @@ async function downloadImages(url, debugPrefix='', browserPromise) {
     const objectDir = `data/objects/${hash}`;
     await mkdirp(objectDir);
 
-    console.log(`${debugPrefix}[${new Date().toLocaleString()}] Downloading ${url}`);
+    console.log(`${debugPrefix}[${new Date().toLocaleString()}] Downloading ${url} with hash ${hash}`);
 
     const indexFile = objectDir + '/index.json';
     if (fs.existsSync(indexFile)) {
-        console.log(`${debugPrefix}Already downloaded ${url}`);
+        console.log(`${debugPrefix}Already downloaded ${hash}`);
         return;
     }
 
@@ -54,7 +54,7 @@ async function downloadImages(url, debugPrefix='', browserPromise) {
     console.log(`${debugPrefix}[${new Date().toLocaleString()}] Download complete of ${hash}`);
 
     const elapsedTime = Date.now() - startTime;
-    console.log(`${debugPrefix}[${new Date().toLocaleString()}] Finished getting images (${index.length} downloaded, ${elapsedTime}ms)`);
+    console.log(`${debugPrefix}[${new Date().toLocaleString()}] Finished getting images (${index.length} downloaded, ${elapsedTime}ms) ${hash}`);
 }
 
 function downloadImage(imageURL, objectDir, i) {
@@ -81,7 +81,7 @@ async function downloadAll() {
     const urls = [];
 
     for (let ra = 0; ra < 360; ra += 1) {
-        for (let dec = 0; dec < 360; dec += 1) {
+        for (let dec = -90; dec < 90; dec += 1) {
             urls.push(generateUrl(ra, dec, 1));
         }
     }

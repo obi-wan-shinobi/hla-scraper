@@ -2,8 +2,9 @@ const fs = require('fs');
 const { promisify } = require('util');
 const path = require('path');
 const getSize = promisify(require('get-folder-size'));
+const process = require('process');
 
-async function printStats() {
+async function printStats(lastCount, lastCountChange) {
     const objectDir = 'data/objects';
     const files = await promisify(fs.readdir)(objectDir);
 
@@ -26,10 +27,36 @@ async function printStats() {
         mergedIndex = [...mergedIndex, ...JSON.parse(contents)];
     }
 
-    console.log(`There are ${mergedIndex.length} images downloaded`);
-
     const size = await getSize(objectDir);
-    console.log(`Size: ${(size/1024/1024).toFixed(1)} MB`);
+
+    process.stdout.clearLine();
+    process.stdout.cursorTo(0);
+    let message = `${mergedIndex.length} images downloaded (${(size/1024/1024).toFixed(1)} MB`;
+    if (lastCountChange) {
+        if (mergedIndex.length !== lastCount) {
+            lastCountChange = Date.now();
+        }
+
+        message += `, last new images ${((Date.now() - lastCountChange)/1000).toFixed()}s ago`;
+    }
+    message += ')';
+    process.stdout.write(message);
+
+    return mergedIndex.length;
 }
 
-printStats();
+if (process.argv.length >= 3 && process.argv[2] === '-t') {
+    let lastCount = null;
+    let lastCountChange = null;
+
+    setInterval(async () => {
+        const count = await printStats(lastCount, lastCountChange);
+
+        if (count !== lastCount) {
+            lastCount = count;
+            lastCountChange = new Date();
+        }
+    }, 1000);
+} else {
+    printStats();
+}
