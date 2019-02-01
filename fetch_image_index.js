@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 
 const IMAGES_PER_PAGE = 20;
 
-async function getImageIndex(url) {
+async function getImageIndex(url, debugPrefix='') {
     const browser = await puppeteer.launch({ headless: true });
 
     const page = await browser.newPage();
@@ -11,7 +11,7 @@ async function getImageIndex(url) {
     let results = [];
 
     try {
-        results = await fetchAllPages(page);
+        results = await fetchAllPages(page, debugPrefix);
     } catch (e) {
         throw e;
     } finally {
