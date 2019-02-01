@@ -6,7 +6,7 @@ async function getImageIndex(url, debugPrefix='') {
     const browser = await puppeteer.launch({ headless: true });
 
     const page = await browser.newPage();
-    await page.goto(url, {waitUntil: 'networkidle2'});
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
 
     let results = [];
 
@@ -25,11 +25,16 @@ async function getImageIndex(url, debugPrefix='') {
 async function fetchAllPages(page, debugPrefix='') {
     let allResults = [];
     while (true) {
-        await waitForPage(page, allResults.length + 1, debugPrefix + '\t');
+        const firstImage = await waitForPage(page, allResults.length + 1, debugPrefix + '\t');
+        if (firstImage === 0) { // none found
+            console.log(`${debugPrefix} No results after filtering`);
+            return allResults;
+        }
+
         const results = await scrapeImageIndex(page, debugPrefix + '\t');
         allResults = [...allResults, ...results];
 
-        console.log(`${results.length} new images indexed (${allResults.length} total)`);
+        console.log(`${debugPrefix}${results.length} new images indexed (${allResults.length} total)`);
 
         const wasLast = (results.length % IMAGES_PER_PAGE !== 0) ||
             await page.evaluate(() => !!document.querySelector('.fwd.inactive'));
@@ -60,6 +65,10 @@ async function waitForPage(page, expectedStartImage, debugPrefix='') {
             return document.querySelector('#pageendresultscount').innerText;
         }));
 
+        if (lastImage === 0) { // no results, return
+            return 0;
+        }
+
         firstImage = lastImage % IMAGES_PER_PAGE === 0 ?
             lastImage - IMAGES_PER_PAGE + 1 :
             lastImage - (lastImage % IMAGES_PER_PAGE) + 1;
@@ -89,7 +98,7 @@ async function waitForPage(page, expectedStartImage, debugPrefix='') {
 
     await Promise.all(waitingImages);
 
-    console.log(`${debugPrefix}All iframes done`)
+    console.log(`${debugPrefix}All iframes done`);
 }
 
 async function scrapeImageIndex(page) {
