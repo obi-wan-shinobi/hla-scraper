@@ -4,11 +4,18 @@ const path = require('path');
 const getSize = promisify(require('get-folder-size'));
 const process = require('process');
 
+const MAX_TIME = 60*5*1000; // after 5 minutes of no new images, beep angrily
+
+const countCache = new Map();
+const sizeCache = new Map();
+
 async function printStats(lastCount, lastCountChange) {
+    const startTime = Date.now();
     const objectDir = 'data/objects';
     const files = await promisify(fs.readdir)(objectDir);
 
-    let mergedIndex = [];
+    let count = 0;
+    let size = 0;
 
     for (const file of files) {
         const subdir = path.join(objectDir, file);
@@ -16,33 +23,59 @@ async function printStats(lastCount, lastCountChange) {
             continue;
         }
 
-        const indexFile = path.join(subdir, 'index.json');
+        (async () => {
+            const indexFile = path.join(subdir, 'index.json');
+            if (countCache.has(indexFile)) {
+                count += countCache.get(indexFile);
+                return;
+            }
 
-        if (!fs.existsSync(indexFile)) {
-            continue;
-        }
+            if (!fs.existsSync(indexFile)) {
+                return;
+            }
 
-        const contents = await promisify(fs.readFile)(indexFile);
+            const contents = await promisify(fs.readFile)(indexFile);
+            const index = JSON.parse(contents);
 
-        mergedIndex = [...mergedIndex, ...JSON.parse(contents)];
+            countCache.set(indexFile, index.length);
+
+            count += index.length;
+        })();
+
+        (async () => {
+            if (sizeCache.has(subdir)) {
+                size += sizeCache.get(subdir);
+                return;
+            }
+
+            const partialSize = await getSize(subdir);
+
+            sizeCache.set(subdir, partialSize);
+            size += partialSize;
+        })();
     }
 
-    const size = await getSize(objectDir);
+    const elapsed = Date.now() - startTime;
 
     process.stdout.clearLine();
     process.stdout.cursorTo(0);
-    let message = `${mergedIndex.length} images downloaded (${(size/1024/1024).toFixed(1)} MB`;
+    let message = `${count} images downloaded (${(size/1024/1024).toFixed(1)} MB`;
     if (lastCountChange) {
-        if (mergedIndex.length !== lastCount) {
+        if (count !== lastCount) {
             lastCountChange = Date.now();
         }
 
-        message += `, last new images ${((Date.now() - lastCountChange)/1000).toFixed()}s ago`;
+        const since = Date.now() - lastCountChange;
+        if (since > MAX_TIME) {
+            process.stdout.write('\007');
+        }
+
+        message += `, last new images ${(since/1000).toFixed()}s ago`;
     }
-    message += ')';
+    message += `; ${elapsed.toFixed()}ms query)`;
     process.stdout.write(message);
 
-    return mergedIndex.length;
+    return count;
 }
 
 if (process.argv.length >= 3 && process.argv[2] === '-t') {
