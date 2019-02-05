@@ -4,7 +4,7 @@ const path = require('path');
 const getSize = promisify(require('get-folder-size'));
 const process = require('process');
 
-const MAX_TIME = 60*5*1000; // after 5 minutes of no new images, beep angrily
+const MAX_TIME = 20*60*1000; // after too many minutes of no new images, beep angrily
 
 const countCache = new Map();
 const sizeCache = new Map();
@@ -23,14 +23,16 @@ async function printStats(lastCount, lastCountChange) {
             continue;
         }
 
+        const indexFile = path.join(subdir, 'index.json');
+        const indexExists = fs.existsSync(indexFile);
+
         (async () => {
-            const indexFile = path.join(subdir, 'index.json');
             if (countCache.has(indexFile)) {
                 count += countCache.get(indexFile);
                 return;
             }
 
-            if (!fs.existsSync(indexFile)) {
+            if (!indexExists) {
                 return;
             }
 
@@ -43,6 +45,10 @@ async function printStats(lastCount, lastCountChange) {
         })();
 
         (async () => {
+            if (!indexExists) { // ignore incomplete ones
+                return;
+            }
+
             if (sizeCache.has(subdir)) {
                 size += sizeCache.get(subdir);
                 return;

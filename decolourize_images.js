@@ -70,7 +70,11 @@ async function decolourizeAll() {
     }
 
     const elapsed = Date.now() - startTime;
-    console.log(`Done in ${elapsed}ms (${totalCount} black and white images)`);
+    console.log(`Done in ${(elapsed/1000).toFixed(1)}s (${totalCount} black and white images)`);
 }
 
-decolourizeAll();
+if (process.argv[1].split('/').pop() === 'decolourize_images.js') {
+    decolourizeAll();
+}
+
+module.exports = decolourizeAll;
