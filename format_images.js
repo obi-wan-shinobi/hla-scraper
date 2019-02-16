@@ -2,64 +2,82 @@ const fs = require('fs');
 const { promisify } = require('util');
 const path = require('path');
 const mkdirp = promisify(require('mkdirp'));
-const decolourizeAll = require('./decolourize_images');
+const { decolourizeImage } = require('./decolourize_images');
 
-async function copyDirectory(dir, colourDir, bwDir) {
-    const files = await promisify(fs.readdir)(dir);
+const INPUT_FOLDERS = [
+    'data/cropped-heritage',
+    'data/cropped-hubblesite',
+];
 
-    let count = 0;
+const OUTPUT_FOLDER = 'data/formatted';
 
-    for (const file of files) {
-        let outputDir;
-
-        if (/image-\d+-bw\.jpeg/.test(file)) {
-            outputDir = bwDir;
-        } else if (/image-\d+\.jpeg/.test(file)) {
-            outputDir = colourDir;
-        }
-
-        if (!outputDir) {
-            continue;
-        }
-
-        const outputPath = path.join(outputDir, `${dir.split('/').pop()}-${file.match(/\d+/)[0]}.jpeg`);
-
-        await promisify(fs.copyFile)(path.join(dir, file), outputPath);
-        count ++;
-    }
-
-    return count;
-}
+const DEV_PORTION = 0.1;
+const TEST_PORTION = 0.1;
 
 async function formatImages() {
-    const startTime = Date.now();
-
-    await decolourizeAll();
-
-    const objectDir = 'data/objects';
-    const colourDir = 'data/formatted/colour';
-    const bwDir = 'data/formatted/bw';
-
-    await mkdirp(colourDir);
-    await mkdirp(bwDir);
-
-    const files = await promisify(fs.readdir)(objectDir);
-
-    let totalCount = 0;
-
-    for (const file of files) {
-        const subdir = path.join(objectDir, file);
-        if (!(await promisify(fs.stat)(subdir)).isDirectory()) {
-            continue;
-        }
-
-        totalCount += await copyDirectory(subdir, colourDir, bwDir);
-        const speed = 1000*totalCount/(Date.now() - startTime);
-        console.log(`${totalCount} complete (just processed ${subdir}; speed ${speed.toFixed(1)}/s)`);
-    }
-
-    const elapsed = Date.now() - startTime;
-    console.log(`Finished ${totalCount} in ${(elapsed/1000).toFixed(1)}s`)
+    const imagePaths = await getImagePaths();
+    console.log(`${imagePaths.length} images total`);
+    await splitImages(imagePaths);
 }
 
-formatImages();
+async function getImagePaths() {
+    let files = [];
+
+    for (let folder of INPUT_FOLDERS) {
+        const newFiles = (await promisify(fs.readdir)(folder))
+            .map((file) => path.join(folder, file));
+
+        files = [...files, ...newFiles];
+    }
+
+    return files.filter((file) => /\.(png|jpe?g)$/.test(file));
+}
+
+async function splitImages(imagePaths) {
+    await mkdirp(OUTPUT_FOLDER);
+
+    shuffle(imagePaths);
+
+    const splitIndexDev = Math.floor(imagePaths.length * DEV_PORTION);
+    const splitIndexTest = splitIndexDev + Math.floor(imagePaths.length * TEST_PORTION);
+
+    const dev = imagePaths.slice(0, splitIndexDev);
+    const test = imagePaths.slice(splitIndexDev, splitIndexTest);
+    const train = imagePaths.slice(splitIndexTest);
+
+    console.log(`${train.length}/${dev.length}/${test.length} split`);
+
+    await copyImages(train, path.join(OUTPUT_FOLDER, 'train'));
+    await copyImages(dev, path.join(OUTPUT_FOLDER, 'dev'));
+    await copyImages(test, path.join(OUTPUT_FOLDER, 'test'));
+
+    return [path.join(OUTPUT_FOLDER, 'train'), path.join(OUTPUT_FOLDER, 'dev'), path.join(OUTPUT_FOLDER, 'test')]
+}
+
+async function copyImages(imagePaths, outputDir) {
+    const bwDir = path.join(outputDir, 'bw');
+    const colourDir = path.join(outputDir, 'colour');
+    await mkdirp(bwDir);
+    await mkdirp(colourDir);
+
+    for (let i = 0; i < imagePaths.length; i++) {
+        const ending = imagePaths[i].split('.').pop();
+        const name = `image-${i}.${ending}`;
+
+        console.log(`\tCopying ${i+1}/${imagePaths.length} in ${outputDir}`);
+
+        await decolourizeImage(imagePaths[i], () => path.join(bwDir, name));
+        await promisify(fs.copyFile)(imagePaths[i], path.join(colourDir, name));
+    }
+}
+
+// From https://stackoverflow.com/questions/6274339/how-can-i-shuffle-an-array
+function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+formatImages().then(console.log);

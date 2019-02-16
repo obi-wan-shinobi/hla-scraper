@@ -9,10 +9,11 @@ function outputFile(inputFile) {
     });
 }
 
-function decolourizeImage(imageFile) {
+function decolourizeImage(imageFile, outputFileGenerator) {
+    outputFileGenerator = outputFileGenerator || outputFile;
     return sharp(imageFile)
         .greyscale()
-        .toFile(outputFile(imageFile))
+        .toFile(outputFileGenerator(imageFile))
         .catch((error) => {
             console.log('Error in', imageFile);
             throw error;
@@ -77,4 +78,4 @@ if (process.argv[1].split('/').pop() === 'decolourize_images.js') {
     decolourizeAll();
 }
 
-module.exports = decolourizeAll;
+module.exports = { decolourizeAll, decolourizeImage };
