@@ -60,14 +60,18 @@ async function copyImages(imagePaths, outputDir) {
     await mkdirp(bwDir);
     await mkdirp(colourDir);
 
-    for (let i = 0; i < imagePaths.length; i++) {
+    for (let i = outputDir === 'data/formatted/train' ? 5885 : 0; i < imagePaths.length; i++) {
         const ending = imagePaths[i].split('.').pop();
         const name = `image-${i}.${ending}`;
 
         console.log(`\tCopying ${i+1}/${imagePaths.length} in ${outputDir}`);
 
-        await decolourizeImage(imagePaths[i], () => path.join(bwDir, name));
-        await promisify(fs.copyFile)(imagePaths[i], path.join(colourDir, name));
+        try {
+            await decolourizeImage(imagePaths[i], () => path.join(bwDir, name));
+            await promisify(fs.copyFile)(imagePaths[i], path.join(colourDir, name));
+        } catch (e) {
+            console.error(e);
+        }
     }
 }
 
