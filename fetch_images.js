@@ -80,7 +80,11 @@ function downloadImage(imageURL, objectDir, i) {
 async function downloadAll() {
     const urls = [];
 
-    for (let ra = 0; ra < 360; ra += 1) {
+    for(let dec = -47; dec < 90; dec+=1) {
+      urls.push(generateUrl(17, dec, 1));
+    }
+
+    for (let ra = 18; ra < 360; ra += 1) {
         for (let dec = -90; dec < 90; dec += 1) {
             urls.push(generateUrl(ra, dec, 1));
         }
