@@ -80,9 +80,11 @@ function downloadImage(imageURL, objectDir, i) {
 async function downloadAll() {
     const urls = [];
 
-    for(let dec = -37; dec < 90; dec+=1){
-      urls.push(generateUrl(29, dec, 1));
-    }
+
+    //Change the RA values in the for loop given below according to the values assigned
+    //Range should be about 90 degrees.
+    //Do not make changes to the dec value
+
 
     for (let ra = 30; ra < 360; ra += 1) {
         for (let dec = -90; dec < 90; dec += 1) {
